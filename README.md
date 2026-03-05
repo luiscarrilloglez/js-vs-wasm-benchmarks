@@ -1,6 +1,6 @@
 # JavaScript vs Rust + WebAssembly — Benchmark Suite
 
-A single-page app that runs three CPU-intensive tests side by side, comparing plain JavaScript against Rust compiled to WebAssembly (WASM). Both sides run the **exact same algorithm** — the only difference is the runtime.
+A single-page app that runs four tests side by side, comparing plain JavaScript against Rust compiled to WebAssembly (WASM). Both sides run the **exact same algorithm** — the only difference is the runtime. Three tests are CPU-intensive to show where WASM wins; one test deliberately shows where **JavaScript wins**.
 
 ---
 
@@ -10,8 +10,7 @@ A single-page app that runs three CPU-intensive tests side by side, comparing pl
 |------|-----------------|
 | **Matrix Multiplication 512×512** | ~134 million multiply-add operations |
 | **Mandelbrot Set 800×600 px** | 480,000 pixels × up to 300 math iterations each |
-| **Sieve of Eratosthenes to 5M** | Finding all prime numbers up to 5 million |
-
+| **Sieve of Eratosthenes to 5M** | Finding all prime numbers up to 5 million || **Cold Start** | fetch + instantiate + run vs already-loaded JS |
 After each test the page shows the time for both runtimes and explains in plain language why one was faster.
 
 ---
@@ -21,13 +20,13 @@ After each test the page shows the time for both runtimes and explains in plain 
 The app is a single HTML page with no build step, no framework, and no dependencies beyond the compiled WASM binary. When you open it in a browser:
 
 1. The WASM module (`rust_wasm_app_bg.wasm`) is fetched and instantiated via `main.js`.
-2. You click **▶ Run All Benchmarks** to trigger all three tests sequentially.
+2. You click **▶ Run All Benchmarks** to trigger all four tests sequentially.
 3. Each test runs the JavaScript version first, then the WASM version, measuring wall-clock time with `performance.now()`.
 4. Results are displayed side by side with a colour-coded winner and a plain-language explanation.
 
 ---
 
-## The three benchmarks
+## The four benchmarks
 
 ### 1 · Matrix Multiplication 512×512
 
@@ -53,6 +52,14 @@ Finds all prime numbers up to **5 million** using a boolean flag array.
 - Returns the total prime count (348 513).
 - **Why it stresses the runtime:** integer arithmetic with large linear-memory writes. WASM's flat memory model gives it an edge over the JS heap for this access pattern.
 
+### 4 · Cold Start — fetch + instantiate + run
+
+Both sides compute the same trivial result: count integers from 1 to 1 000 000 divisible by 7 (~142K results). The measurement is deliberately asymmetric:
+
+- **JS side:** calls the already-parsed module directly — execution starts in microseconds.
+- **WASM side:** performs a raw `fetch()` + `WebAssembly.instantiateStreaming()` + `instance.exports.bench_cold_start()`, bypassing the cached `init()` module (`cache: 'no-store'`).
+- **Why JS wins here:** the browser parsed and compiled the JS module at page load. WASM must make a network round-trip, then the browser validates and compiles the binary to native code before the first instruction runs. On localhost the binary is only 10 KB — on a real network with a 500 KB+ binary the gap widens significantly.
+
 ---
 
 ## Understanding the results
@@ -61,7 +68,8 @@ Finds all prime numbers up to **5 million** using a boolean flag array.
 |----------|--------------|
 | **WASM significantly faster** | The Rust compiler applied optimisations (SIMD, inlining, zero-cost abstractions) that V8's JIT cannot match for this workload. Typical for matrix multiplication. |
 | **JS and WASM within ~20 %** | V8's JIT has fully warmed up and both runtimes are near their peak for this pattern. Common for the Mandelbrot and Sieve tests on modern Chrome/Firefox. |
-| **JS faster** | Rare for pure compute, but can happen on short runs where WASM instantiation overhead is not amortised, or on engines with particularly strong JIT for scalar loops. |
+| **JS faster (compute tests)** | Can happen on short runs where WASM instantiation overhead is not amortised, or on engines with particularly strong JIT for scalar loops. |
+| **JS faster (cold start test)** | Expected and by design. JS module is already loaded; WASM must fetch, validate, and compile the binary before running. This is a structural cost, not a fluke. |
 | **Results vary between runs** | Normal — the OS scheduler, garbage collection pauses, and CPU thermal throttling all introduce noise. Run several times and compare averages. |
 
 > **Note:** WASM does not have access to multiple threads or SIMD in this demo (it uses the `wasm32-unknown-unknown` target without the `atomics` or `simd128` features). Enabling those would widen the gap further in favour of WASM.
