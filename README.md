@@ -16,6 +16,58 @@ After each test the page shows the time for both runtimes and explains in plain 
 
 ---
 
+## How the app works
+
+The app is a single HTML page with no build step, no framework, and no dependencies beyond the compiled WASM binary. When you open it in a browser:
+
+1. The WASM module (`rust_wasm_app_bg.wasm`) is fetched and instantiated via `main.js`.
+2. You click **▶ Run All Benchmarks** to trigger all three tests sequentially.
+3. Each test runs the JavaScript version first, then the WASM version, measuring wall-clock time with `performance.now()`.
+4. Results are displayed side by side with a colour-coded winner and a plain-language explanation.
+
+---
+
+## The three benchmarks
+
+### 1 · Matrix Multiplication 512×512
+
+Multiplies two 512×512 matrices of 64-bit floats — roughly **134 million multiply-add operations**.
+
+- Loop order is `i → k → j` for maximum cache locality.
+- The return value is the count of result cells whose value exceeds 100 (used to prevent the compiler from optimising away the work).
+- **Why it stresses the runtime:** sustained, regular floating-point arithmetic with predictable memory access. Rust/WASM can auto-vectorise the inner loop with SIMD; V8 cannot guarantee the same.
+
+### 2 · Mandelbrot Set 800×600 px
+
+Computes the classic Mandelbrot fractal over an 800 × 600 grid, allowing up to **300 iterations per pixel** (480 000 pixels total).
+
+- Each pixel runs a tight `while` loop with early exit — highly **branchy** arithmetic.
+- Returns the count of pixels that belong to the set (those that reached the iteration limit).
+- **Why it stresses the runtime:** irregular branch patterns make speculative execution hard. This test reveals how well each runtime handles unpredictable loop lengths.
+
+### 3 · Sieve of Eratosthenes to 5 000 000
+
+Finds all prime numbers up to **5 million** using a boolean flag array.
+
+- Allocates a `Uint8Array` / `Vec<bool>` and performs dense sequential writes (marking composites).
+- Returns the total prime count (348 513).
+- **Why it stresses the runtime:** integer arithmetic with large linear-memory writes. WASM's flat memory model gives it an edge over the JS heap for this access pattern.
+
+---
+
+## Understanding the results
+
+| Scenario | What it means |
+|----------|--------------|
+| **WASM significantly faster** | The Rust compiler applied optimisations (SIMD, inlining, zero-cost abstractions) that V8's JIT cannot match for this workload. Typical for matrix multiplication. |
+| **JS and WASM within ~20 %** | V8's JIT has fully warmed up and both runtimes are near their peak for this pattern. Common for the Mandelbrot and Sieve tests on modern Chrome/Firefox. |
+| **JS faster** | Rare for pure compute, but can happen on short runs where WASM instantiation overhead is not amortised, or on engines with particularly strong JIT for scalar loops. |
+| **Results vary between runs** | Normal — the OS scheduler, garbage collection pauses, and CPU thermal throttling all introduce noise. Run several times and compare averages. |
+
+> **Note:** WASM does not have access to multiple threads or SIMD in this demo (it uses the `wasm32-unknown-unknown` target without the `atomics` or `simd128` features). Enabling those would widen the gap further in favour of WASM.
+
+---
+
 ## Requirements
 
 You need three tools installed before you can build and run this project.
