@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JavaScript vs Rust + WebAssembly — Benchmark Suite</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #1a1d24;
+      --surface:      #22262f;
+      --border:       #2e3340;
+      --text:         #d4d8e2;
+      --muted:        #a0a8bc;
+      --subtle:       #6e7891;
+      --white:        #ffffff;
+      --js-accent:    #f7df1e;
+      --wasm-accent:  #8c72fb;
+      --green:        #4ade80;
+      --red:          #f87171;
+      --insight-bg:   #1d2535;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
+      padding: 48px 20px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .header { text-align: center; display: flex; flex-direction: column; gap: 10px; }
+
+    h1 {
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -0.5px;
+    }
+
+    h1 .js-tag   { color: var(--js-accent); }
+    h1 .wasm-tag { color: var(--wasm-accent); }
+
+    .subtitle {
+      font-size: 0.88rem;
+      color: var(--muted);
+      max-width: 600px;
+      line-height: 1.6;
+    }
+
+    /* ── Run button ──────────────────────────────────────────────────────── */
+    #run-btn {
+      background: #61dafb;
+      color: #1a1d24;
+      border: none;
+      padding: 14px 52px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border-radius: 999px;
+      cursor: pointer;
+      letter-spacing: 0.3px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    #run-btn:hover:not(:disabled) { opacity: 0.85; transform: scale(1.02); }
+    #run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Benchmark section ───────────────────────────────────────────────── */
+    .benchmarks { display: flex; flex-direction: column; gap: 32px; width: 100%; max-width: 860px; }
+
+    .benchmark-group { display: flex; flex-direction: column; gap: 12px; }
+
+    .bench-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .bench-header {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .bench-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    /* Plain-English description — easy to read for anyone */
+    .bench-plain {
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.65;
+      max-width: 720px;
+    }
+
+    /* Technical note — smaller and dimmer */
+    .bench-tech {
+      font-size: 0.78rem;
+      color: var(--subtle);
+      line-height: 1.5;
+      max-width: 720px;
+    }
+    .bench-tech code {
+      background: var(--border);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.73rem;
+    }
+
+    /* Result insight box — shown after running */
+    .result-insight {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      background: var(--insight-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--wasm-accent);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+
+    .insight-headline {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--white);
+    }
+    .insight-headline .speedup { color: var(--green); }
+
+    .insight-body {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* Separator between benchmarks */
+    .bench-sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      width: 100%;
+    }
+
+    .bench-number {
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: var(--border);
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    /* ── Card pair ───────────────────────────────────────────────────────── */
+    .card-pair {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .vs-divider {
+      font-size: 0.8rem;
+      font-weight: 900;
+      color: var(--border);
+      padding: 0 4px;
+      user-select: none;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card-js   { border-top: 3px solid var(--js-accent); }
+    .card-wasm { border-top: 3px solid var(--wasm-accent); }
+
+    .card-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-js   { background: #f7df1e22; color: var(--js-accent); }
+    .badge-wasm { background: #8c72fb22; color: var(--wasm-accent); }
+
+    .stats { display: flex; gap: 20px; }
+
+    .stat { display: flex; flex-direction: column; gap: 3px; }
+
+    .stat-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+    }
+
+    .stat-value {
+      font-family: 'Courier New', monospace;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    .stat-value.done { color: var(--green); }
+
+    .state-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Mismatch alert ──────────────────────────────────────────────────── */
+    .mismatch-alert {
+      display: none;
+      background: #7f1d1d;
+      color: var(--red);
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.8rem;
+      text-align: center;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    .footer {
+      font-size: 0.76rem;
+      color: var(--subtle);
+      text-align: center;
+      max-width: 560px;
+      line-height: 1.7;
+    }
+
+    .footer code {
+      background: var(--surface);
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: #9ca3af;
+      font-size: 0.7rem;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 560px) {
+      .card-pair { grid-template-columns: 1fr; }
+      .vs-divider { display: none; }
+      .stats { flex-direction: column; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1><span class="js-tag">JavaScript</span> vs <span class="wasm-tag">Rust + WebAssembly</span></h1>
+    <p class="subtitle">
+      Three tests running the exact same computation in two different runtimes.
+      Hit <strong>Run All Benchmarks</strong> and see the difference for yourself.
+    </p>
+  </div>
+
+  <button id="run-btn" disabled>Loading WASM…</button>
+
+  <div class="benchmarks">
+
+    <!-- ── Benchmark 1: Matrix Multiplication ── -->
+    <div class="benchmark-group">
+      <div class="bench-header">
+        <div class="bench-label">
+          <span class="bench-number">1 of 3</span>
+          <span class="bench-title">Matrix Multiplication — 512 × 512</span>
+        </div>
+        <p class="bench-plain">
+          Imagine multiplying two large spreadsheets cell by cell: each result cell is the
+          sum of an entire row times an entire column. Here we do that for a 512×512 grid —
+          roughly <strong>134 million multiply-and-add operations</strong>.
+        </p>
+        <p class="bench-tech">
+          Both sides use a cache-friendly i→k→j loop over <code>Float64Array</code> / <code>Vec&lt;f64&gt;</code>.
+          <code>rustc -O3</code> auto-vectorises the inner loop using SIMD; V8 cannot guarantee this.
+        </p>
+      </div>
+      <div class="card-pair">
+        <div class="card card-js">
+          <div class="card-title">JavaScript <span class="badge badge-js">V8 / JIT</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="matrix-js-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Elements &gt; 100</span>
+              <span class="stat-value" id="matrix-js-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="matrix-js-state">Waiting…</span>
+        </div>
+        <div class="vs-divider">vs</div>
+        <div class="card card-wasm">
+          <div class="card-title">Rust + WebAssembly <span class="badge badge-wasm">WASM</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="matrix-wasm-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Elements &gt; 100</span>
+              <span class="stat-value" id="matrix-wasm-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="matrix-wasm-state">Waiting…</span>
+        </div>
+      </div>
+      <div class="result-insight" id="matrix-insight">
+        <span class="insight-headline" id="matrix-insight-headline"></span>
+        <span class="insight-body">
+          The Rust compiler turns the inner loop into SIMD instructions that process multiple
+          numbers at the same time. JavaScript's JIT tries to do the same but has less information
+          at compile time, so it often ends up doing one multiplication per step instead of several.
+        </span>
+      </div>
+      <div class="mismatch-alert" id="matrix-mismatch">⚠ Count mismatch — check implementation.</div>
+    </div>
+
+    <hr class="bench-sep" />
+
+    <!-- ── Benchmark 2: Mandelbrot Set ── -->
+    <div class="benchmark-group">
+      <div class="bench-header">
+        <div class="bench-label">
+          <span class="bench-number">2 of 3</span>
+          <span class="bench-title">Mandelbrot Set — 800 × 600 px</span>
+        </div>
+        <p class="bench-plain">
+          The Mandelbrot set is a famous fractal image. To generate it we look at each of
+          the <strong>480,000 pixels</strong> on screen and repeat a simple formula up to
+          <strong>300 times</strong>, checking at each step whether the number has "escaped".
+          No shortcuts — every pixel gets the full treatment.
+        </p>
+        <p class="bench-tech">
+          Purely branchy <code>f64</code> arithmetic: z = z² + c, bail when |z| &gt; 2.
+          No transcendental functions. Represents visual/scientific workloads with
+          unpredictable branch patterns.
+        </p>
+      </div>
+      <div class="card-pair">
+        <div class="card card-js">
+          <div class="card-title">JavaScript <span class="badge badge-js">V8 / JIT</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="mandelbrot-js-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">In-set pixels</span>
+              <span class="stat-value" id="mandelbrot-js-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="mandelbrot-js-state">Waiting…</span>
+        </div>
+        <div class="vs-divider">vs</div>
+        <div class="card card-wasm">
+          <div class="card-title">Rust + WebAssembly <span class="badge badge-wasm">WASM</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="mandelbrot-wasm-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">In-set pixels</span>
+              <span class="stat-value" id="mandelbrot-wasm-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="mandelbrot-wasm-state">Waiting…</span>
+        </div>
+      </div>
+      <div class="result-insight" id="mandelbrot-insight">
+        <span class="insight-headline" id="mandelbrot-insight-headline"></span>
+        <span class="insight-body">
+          Each pixel's loop exits at a different iteration — the CPU can't predict when to stop.
+          WebAssembly runs as pre-compiled machine code with no runtime type checks or garbage
+          collection pauses, so it handles this unpredictable branching more consistently.
+        </span>
+      </div>
+      <div class="mismatch-alert" id="mandelbrot-mismatch">⚠ Count mismatch — check implementation.</div>
+    </div>
+
+    <hr class="bench-sep" />
+
+    <!-- ── Benchmark 3: Sieve of Eratosthenes ── -->
+    <div class="benchmark-group">
+      <div class="bench-header">
+        <div class="bench-label">
+          <span class="bench-number">3 of 3</span>
+          <span class="bench-title">Sieve of Eratosthenes — primes up to 5,000,000</span>
+        </div>
+        <p class="bench-plain">
+          We find every prime number up to 5 million using a classic algorithm: start with a
+          list of 5 million entries and cross out every multiple of 2, then every multiple of 3,
+          and so on. Whatever is left uncrossed is prime. This touches almost every byte in a
+          large block of memory — <strong>sequentially, millions of times</strong>.
+        </p>
+        <p class="bench-tech">
+          <code>Uint8Array</code> / <code>Vec&lt;bool&gt;</code>, standard sieve.
+          Tests dense sequential memory writes — WASM's linear memory has no GC overhead;
+          the JS engine must track object lifetimes alongside the work.
+        </p>
+      </div>
+      <div class="card-pair">
+        <div class="card card-js">
+          <div class="card-title">JavaScript <span class="badge badge-js">V8 / JIT</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="sieve-js-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Primes found</span>
+              <span class="stat-value" id="sieve-js-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="sieve-js-state">Waiting…</span>
+        </div>
+        <div class="vs-divider">vs</div>
+        <div class="card card-wasm">
+          <div class="card-title">Rust + WebAssembly <span class="badge badge-wasm">WASM</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="sieve-wasm-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Primes found</span>
+              <span class="stat-value" id="sieve-wasm-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="sieve-wasm-state">Waiting…</span>
+        </div>
+      </div>
+      <div class="result-insight" id="sieve-insight">
+        <span class="insight-headline" id="sieve-insight-headline"></span>
+        <span class="insight-body">
+          This benchmark is memory-intensive rather than math-intensive. WASM uses a flat block
+          of memory managed directly by the OS. JavaScript's engine adds a layer on top for
+          automatic garbage collection, which introduces bookkeeping overhead even when using
+          typed arrays.
+        </span>
+      </div>
+      <div class="mismatch-alert" id="sieve-mismatch">⚠ Count mismatch — check implementation.</div>
+    </div>
+
+  </div><!-- /.benchmarks -->
+
+  <p class="footer">
+    Compiled with <code>wasm-pack --release</code> · <code>opt-level = 3</code> · <code>lto = true</code><br>
+    Timings use <code>performance.now()</code> — run on a quiet tab for most accurate results.
+  </p>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
