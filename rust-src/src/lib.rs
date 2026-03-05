@@ -87,3 +87,14 @@ pub fn bench_sieve() -> u32 {
 
     is_prime.iter().filter(|&&v| v).count() as u32
 }
+
+// ── Benchmark 4: Cold-start probe ────────────────────────────────────────────
+// A deliberately lightweight computation (~1-2 ms of pure work).
+// In the cold-start benchmark the WASM side measures fetch + instantiation +
+// execution; the JS side measures execution only (module already in memory).
+// Returns the count of integers from 1 to 1 000 000 divisible by 7.
+
+#[wasm_bindgen]
+pub fn bench_cold_start() -> u32 {
+    (1u32..=1_000_000).filter(|i| i % 7 == 0).count() as u32
+}

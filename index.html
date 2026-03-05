@@ -413,7 +413,7 @@
     <div class="benchmark-group">
       <div class="bench-header">
         <div class="bench-label">
-          <span class="bench-number">3 of 3</span>
+          <span class="bench-number">3 of 4</span>
           <span class="bench-title">Sieve of Eratosthenes — primes up to 5,000,000</span>
         </div>
         <p class="bench-plain">
@@ -471,10 +471,78 @@
       <div class="mismatch-alert" id="sieve-mismatch">⚠ Count mismatch — check implementation.</div>
     </div>
 
+    <hr class="bench-sep" />
+
+    <!-- ── Benchmark 4: Cold Start ── -->
+    <div class="benchmark-group">
+      <div class="bench-header">
+        <div class="bench-label">
+          <span class="bench-number">4 of 4</span>
+          <span class="bench-title">Cold Start — fetch + instantiate + run</span>
+        </div>
+        <p class="bench-plain">
+          Both sides run the same trivial computation: count integers from 1 to 1,000,000
+          divisible by 7 (~142K results). The difference is <strong>when the runtime is ready</strong>.
+          JavaScript is already parsed and resident in memory — it starts immediately.
+          WebAssembly must first be <strong>downloaded, compiled, and instantiated</strong>
+          before a single instruction runs.
+        </p>
+        <p class="bench-tech">
+          JS side: direct call to an already-loaded module. WASM side: raw
+          <code>fetch()</code> + <code>WebAssembly.instantiateStreaming()</code> +
+          <code>instance.exports.bench_cold_start()</code>. Cache bypassed with
+          <code>cache: 'no-store'</code>. On localhost the binary is only 10 KB — on a
+          real network with a 500 KB+ binary the gap widens significantly.
+        </p>
+      </div>
+      <div class="card-pair">
+        <div class="card card-js">
+          <div class="card-title">JavaScript <span class="badge badge-js">V8 / JIT</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="coldstart-js-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Divisible by 7</span>
+              <span class="stat-value" id="coldstart-js-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="coldstart-js-state">Waiting…</span>
+        </div>
+        <div class="vs-divider">vs</div>
+        <div class="card card-wasm">
+          <div class="card-title">Rust + WebAssembly <span class="badge badge-wasm">WASM</span></div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Time (incl. load)</span>
+              <span class="stat-value" id="coldstart-wasm-time">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Divisible by 7</span>
+              <span class="stat-value" id="coldstart-wasm-count">—</span>
+            </div>
+          </div>
+          <span class="state-label" id="coldstart-wasm-state">Waiting…</span>
+        </div>
+      </div>
+      <div class="result-insight" id="coldstart-insight">
+        <span class="insight-headline" id="coldstart-insight-headline"></span>
+        <span class="insight-body">
+          This is the one scenario where JavaScript has a structural advantage. The browser
+          already parsed and compiled the JS module at page load — execution starts in
+          microseconds. WASM must make a network round-trip, then the browser validates and
+          compiles the binary to native code before the first instruction runs.
+          For short-lived tasks or frequent cold invocations, this startup cost makes WASM impractical.
+        </span>
+      </div>
+      <div class="mismatch-alert" id="coldstart-mismatch">⚠ Count mismatch — check implementation.</div>
+    </div>
+
   </div><!-- /.benchmarks -->
 
   <p class="footer">
-    Compiled with <code>wasm-pack --release</code> · <code>opt-level = 3</code> · <code>lto = true</code><br>
+    Compiled with <code>wasm-bindgen-cli 0.2.114</code> · <code>opt-level = 3</code> · <code>lto = true</code><br>
     Timings use <code>performance.now()</code> — run on a quiet tab for most accurate results.
   </p>
 

@@ -1,5 +1,5 @@
 import init, { bench_matrix, bench_mandelbrot, bench_sieve } from './wasm/rust_wasm_app.js';
-import { jsMatrix, jsMandelbrot, jsSieve } from './benchmarks.js';
+import { jsMatrix, jsMandelbrot, jsSieve, jsColdStart } from './benchmarks.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UI helpers
@@ -21,7 +21,7 @@ function setResult(id, side, time, count) {
 
 /** Reset all panels to idle. */
 function resetAll() {
-  for (const id of ['matrix', 'mandelbrot', 'sieve'])
+  for (const id of ['matrix', 'mandelbrot', 'sieve', 'coldstart'])
     for (const side of ['js', 'wasm'])
       setResult(id, side, null, null);
   document.querySelectorAll('.state-label').forEach(el => el.textContent = 'Waiting…');
@@ -63,7 +63,7 @@ function setInsight(id, jsTime, wasmTime) {
 
 /** Reset all insight boxes to hidden. */
 function resetInsights() {
-  for (const id of ['matrix', 'mandelbrot', 'sieve']) {
+  for (const id of ['matrix', 'mandelbrot', 'sieve', 'coldstart']) {
     const box = document.getElementById(`${id}-insight`);
     if (box) box.style.display = 'none';
   }
@@ -109,6 +109,36 @@ async function runPair(id, jsFn, wasmFn) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Benchmark 4: Cold start — fetch + instantiate + execute vs already-loaded JS
+// ─────────────────────────────────────────────────────────────────────────────
+async function runColdStart() {
+  const id = 'coldstart';
+  setResult(id, 'js',   null, null);
+  setResult(id, 'wasm', null, null);
+  await new Promise(r => setTimeout(r, 16));
+
+  // JS: module is already parsed and in memory — measure execution only
+  const jsStart = performance.now();
+  const jsCount = jsColdStart();
+  const jsTime  = performance.now() - jsStart;
+  setResult(id, 'js', jsTime, jsCount);
+  await new Promise(r => setTimeout(r, 16));
+
+  // WASM: raw fetch + instantiate + execute (bypasses the cached init() module)
+  const wasmStart  = performance.now();
+  const response   = fetch('./wasm/rust_wasm_app_bg.wasm', { cache: 'no-store' });
+  const { instance } = await WebAssembly.instantiateStreaming(response, {
+    './rust_wasm_app_bg.js': {}
+  });
+  const wasmCount = instance.exports.bench_cold_start();
+  const wasmTime  = performance.now() - wasmStart;
+  setResult(id, 'wasm', wasmTime, wasmCount);
+
+  checkMismatch(id, jsCount, wasmCount);
+  setInsight(id, jsTime, wasmTime);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ─────────────────────────────────────────────────────────────────────────────
 async function main() {
@@ -119,9 +149,10 @@ async function main() {
     resetAll();
     resetInsights();
 
-    await runPair('matrix',    jsMatrix,    bench_matrix);
-    await runPair('mandelbrot', jsMandelbrot, bench_mandelbrot);
-    await runPair('sieve',     jsSieve,     bench_sieve);
+    await runPair('matrix',      jsMatrix,      bench_matrix);
+    await runPair('mandelbrot',  jsMandelbrot,  bench_mandelbrot);
+    await runPair('sieve',       jsSieve,       bench_sieve);
+    await runColdStart();
 
     setButton(false);
   });

@@ -73,3 +73,15 @@ export function jsSieve() {
   for (let i = 2; i <= SIEVE_LIMIT; i++) if (isPrime[i]) count++;
   return count;
 }
+
+// ── Benchmark 4: Cold-start probe ─────────────────────────────────────────────
+// Same lightweight computation as bench_cold_start on the Rust side.
+// JS runs this directly — the module is already parsed and loaded by the browser.
+// Returns the count of integers from 1 to 1 000 000 divisible by 7.
+export function jsColdStart() {
+  let count = 0;
+  for (let i = 1; i <= 1_000_000; i++) {
+    if (i % 7 === 0) count++;
+  }
+  return count;
+}
