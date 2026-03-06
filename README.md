@@ -97,9 +97,10 @@ cargo install wasm-bindgen-cli
 ```
 Official repo: https://github.com/wasm-bindgen/wasm-bindgen
 
-> **Note:** `wasm-pack` was previously used for this step but has been archived and is no longer maintained
+> **Note:** `wasm-pack` was a CLI wrapper around `wasm-bindgen` that also generated
+> a `package.json` for npm publishing. It has been archived and is no longer maintained
 > (see [sunsetting announcement](https://blog.rust-lang.org/inside-rust/2025/07/21/sunsetting-the-rustwasm-github-org/)).
-> The recommended replacement is `cargo build` + `wasm-bindgen-cli` directly.
+> This project uses `wasm-bindgen-cli` directly — the same underlying tool, without the npm wrapper.
 
 ---
 
